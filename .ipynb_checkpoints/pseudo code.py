@@ -168,12 +168,13 @@ class Optimize:
         x = data[:, 0]
         y = data[:, 1]
         plt.plot(x, y)
-        if o == 40:
-            data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
-            x = data[:, 0]
-            y = data[:, 1]
-            plt.plot(x, y)
-            plt.show()
+        plt.show()
+        # if o == 40:
+        #     data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
+        #     x = data[:, 0]
+        #     y = data[:, 1]
+        #     plt.plot(x, y)
+        #     plt.show()
 
 # Now it's time to run the code!
 
