@@ -21,9 +21,9 @@ GRAVITY_ACCEL = 0.16  # gravity constant
 BOOST_ACCEL = 0.20  # thrust constant
 
 # # the following parameters are not being used in the sample code
-# PLATFORM_WIDTH = 0.25  # landing platform width
-# PLATFORM_HEIGHT = 0.06  # landing platform height
-# ROTATION_ACCEL = 20  # rotation constant
+PLATFORM_WIDTH = 0.25  # landing platform width
+PLATFORM_HEIGHT = 0.06  # landing platform height
+ROTATION_ACCEL = 20  # rotation constant
 
 # define system dynamics
 # Notes:
@@ -63,13 +63,14 @@ class Dynamics(nn.Module):
 
         # Update state
         # Note: Same as above. Use operators on matrices/tensors as much as possible.
-        #Do not use element-wise operators as they are considered inplace.
+        # Do not use element-wise operators as they are considered inplace.
         step_mat = t.tensor([[1., FRAME_TIME],
                             [0., 1.]])
         state = t.matmul(step_mat, state)
 
         return state
-        print(type(state))
+
+        # print(type(state))
 
 # a deterministic controller
 # Note:
@@ -169,7 +170,7 @@ class Optimize:
         x = data[:, 0]
         y = data[:, 1]
         plt.plot(x, y)
-        plt.show()
+        # plt.show()
         # if o == 40:
         #     data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
         #     x = data[:, 0]
