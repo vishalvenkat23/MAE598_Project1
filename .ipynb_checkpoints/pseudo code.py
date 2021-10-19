@@ -25,12 +25,10 @@ BOOST_ACCEL = 0.20  # thrust constant
 # PLATFORM_HEIGHT = 0.06  # landing platform height
 # ROTATION_ACCEL = 20  # rotation constant
 
-# define system dynamics
-# Notes:
-# 0. You only need to modify the "forward" function
-# 1. All variables in "forward" need to be PyTorch tensors.
-# 2. All math operations in "forward" has to be differentiable, e.g., default PyTorch functions.
-# 3. Do not use inplace operations, e.g., x += 1. Please see the following section for an example that does not work.
+"""Constraint 1: Trying to include drag in y direction (upward) but it's going to e less then the thrust"""
+"""Constraint 2: Including the crosswind as a randomness variable"""
+"""Constraint 3: This constraint is sort of side counter thrust to crosswind which acts
+with 90% the power of crosswind because if its same as cross wind it basically cancels each other"""
 
 class Dynamics(nn.Module):
 
@@ -41,9 +39,23 @@ class Dynamics(nn.Module):
     def forward(state, action):
 
         """
-        action: thrust or no thrust
-        state[0] = y
-        state[1] = y_dot
+        action: there are three of them
+        action[0]: take off or landing thrust in y direction range (0, 1)
+        action[1]: cross wind velocity in x direction range (-1, 1)
+                    -1 - cross wind to the left
+                    0 - no cross wind
+                    1 - cross wind to the right
+        action[2]: counter side thrust to cross wind but at 90% power range (-1, 1)
+                    -1 - side thrust to the right
+                    0 - no side thrust
+                    1 - side thrust to left
+        state[0] = x
+        state[1] = v_x
+        state[2] = -0.9*v_x
+        state[3] = -v_x
+        state[4] = 0.9*v_x
+        state[5] = y
+        state[6] = v_y
         """
 
         # Apply gravity
@@ -63,13 +75,14 @@ class Dynamics(nn.Module):
 
         # Update state
         # Note: Same as above. Use operators on matrices/tensors as much as possible.
-        #Do not use element-wise operators as they are considered inplace.
+        # Do not use element-wise operators as they are considered inplace.
         step_mat = t.tensor([[1., FRAME_TIME],
                             [0., 1.]])
         state = t.matmul(step_mat, state)
 
         return state
-        print(type(state))
+
+        # print(type(state))
 
 # a deterministic controller
 # Note:
@@ -169,7 +182,7 @@ class Optimize:
         x = data[:, 0]
         y = data[:, 1]
         plt.plot(x, y)
-        plt.show()
+        # plt.show()
         # if o == 40:
         #     data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
         #     x = data[:, 0]
