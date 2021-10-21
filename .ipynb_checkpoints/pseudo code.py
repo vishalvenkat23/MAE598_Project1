@@ -11,7 +11,6 @@ from torch import optim
 from torch.nn import utils
 import matplotlib.pyplot as plt
 
-
 logger = logging.getLogger(__name__)
 
 # environment parameters
@@ -30,6 +29,7 @@ ROTATION_ACCEL = 20  # rotation constant
 """Constraint 3: This constraint is sort of side counter thrust to crosswind which acts
 with 90% the power of crosswind because if its same as cross wind it basically cancels each other"""
 
+
 class Dynamics(nn.Module):
 
     def __init__(self):
@@ -37,7 +37,6 @@ class Dynamics(nn.Module):
 
     @staticmethod
     def forward(state, action):
-
         """
         action: there are three of them
         action[0]: take off or landing thrust in y direction range (0, 1)
@@ -56,34 +55,46 @@ class Dynamics(nn.Module):
         state[4] = 0.9*v_x
         state[5] = y
         state[6] = v_y
-
         """
-
         # Apply gravity
-        # Note: Here gravity is used to change velocity which is the second element of the state vector
-        # Normally, we would do x[1] = x[1] + gravity * delta_time
-        # but this is not allowed in PyTorch since it overwrites one variable (x[1]) that is part of
-        # the computational graph to be differentiated.
-        # Therefore, I define a tensor dx = [0., gravity * delta_time], and do x = x + dx. This is allowed...
-        delta_state_gravity = t.tensor([0., GRAVITY_ACCEL * FRAME_TIME])
-
+        delta_state_gravity = -t.tensor([0., 0., 0., 0., 0., 0., GRAVITY_ACCEL * FRAME_TIME])
         # Thrust
         # Note: Same reason as above. Need a 2-by-1 tensor.
-        delta_state = BOOST_ACCEL * FRAME_TIME * t.tensor([0., -1.]) * action
+        vertical_thrust_y = action[0]
+        crosswind = action[1]
+        side_counter_thrust = action[2]
 
+        delta_state_vertical = BOOST_ACCEL * FRAME_TIME * t.tensor(
+            [0., 0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
+        delta_state_crosswind_r = BOOST_ACCEL * FRAME_TIME * t.tensor(
+            [0., 1., 0., 0., 0., 0., 0.]) * action * crosswind  # 2
+        delta_state_crosswind_l = BOOST_ACCEL * FRAME_TIME * t.tensor(
+            [0., 0., 0., -1., 0., 0., 0.]) * action * crosswind  # 3
+        delta_state_side_thrust_l = BOOST_ACCEL * FRAME_TIME * t.tensor(
+            [0., 0., -1., 0., 0., 0., 0.]) * action * side_counter_thrust  # 4
+        delta_state_side_thrust_r = BOOST_ACCEL * FRAME_TIME * t.tensor(
+            [0., 0., 0., 0., 1., 0., 0.]) * action * side_counter_thrust  # 5
         # Update velocity
-        state = state + delta_state + delta_state_gravity # drag part goes in here
-
+        state = state + delta_state_vertical + delta_state_crosswind_r + delta_state_crosswind_l + delta_state_side_thrust_r + delta_state_side_thrust_l + delta_state_gravity  # drag part goes in here
         # Update state
         # Note: Same as above. Use operators on matrices/tensors as much as possible.
         # Do not use element-wise operators as they are considered inplace.
-        step_mat = t.tensor([[1., FRAME_TIME],
-                            [0., 1.]])
+        step_mat = t.tensor([[0., 0., 0., 0., 0., 1., FRAME_TIME],  # 1
+                             [0., 0., 0., 0., 0., 0., 1.],  # 1
+                             [1., FRAME_TIME, 0., 0., 0., 0., 0.],  # 2
+                             [0., 1., 0., 0., 0., 0., 0.],  # 2
+                             [1., 0., 0., FRAME_TIME, 0., 0., 0.],  # 3
+                             [0., 0., 0., 1., 0., 0., 0., 0.],  # 3
+                             [1., 0., FRAME_TIME, 0., 0., 0., 0.],  # 4
+                             [0., 0., 1., 0., 0., 0., 0.],  # 4
+                             [1., 0., 0., 0., FRAME_TIME, 0., 0.],  # 5
+                             [0., 0., 0., 0., 1., 0., 0.]])  # 5
         state = t.matmul(step_mat, state)
 
         return state
 
         # print(type(state))
+
 
 # a deterministic controller
 # Note:
@@ -114,6 +125,7 @@ class Controller(nn.Module):
         action = self.network(state)
         return action
 
+
 # the simulator that rolls out x(1), x(2), ..., x(T)
 # Note:
 # 0. Need to change "initialize_state" to optimize the controller over a distribution of initial states
@@ -142,11 +154,13 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        state = [1., 0.]  # need batch of initial states
+        #  state 0   1   2   3   4   5   6
+        state = [1., 0., 2., 5., 7., 5., 8.]  # need batch of initial states
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state):
-        return state[0]**2 + state[1]**2
+        return state[0] ** 2 + state[1] ** 2 + state[2] ** 2 + state[3] ** 2 + state[4] ** 2 + state[5] ** 2 + state[6] ** 2
+
 
 # set up the optimizer
 # Note:
@@ -169,6 +183,7 @@ class Optimize:
             self.optimizer.zero_grad()
             loss.backward()
             return loss
+
         self.optimizer.step(closure)
         return closure()
 
@@ -191,18 +206,20 @@ class Optimize:
         #     plt.plot(x, y)
         #     plt.show()
 
+
 # Now it's time to run the code!
 
 T = 100  # number of time steps
-dim_input = 2  # state space dimensions
-dim_hidden = 6  # latent dimensions
-dim_output = 1  # action space dimensions
+dim_input = 7  # state space dimensions
+dim_hidden = 20  # latent dimensions
+dim_output = 2  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
 o = Optimize(s)  # define optimizer
-o.train(40)  # solve the optimization problem
+o.train(80)  # solve the optimization problem
 print(s)
 print(type(s))
 print(d)
+
 print(c)
