@@ -56,6 +56,7 @@ class Dynamics(nn.Module):
         state[4] = 0.9*v_x
         state[5] = y
         state[6] = v_y
+
         """
 
         # Apply gravity
