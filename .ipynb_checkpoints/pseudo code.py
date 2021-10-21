@@ -15,20 +15,19 @@ logger = logging.getLogger(__name__)
 
 # environment parameters
 
-FRAME_TIME = 0.1  # time interval
-GRAVITY_ACCEL = 0.16  # gravity constant
-BOOST_ACCEL = 0.20  # thrust constant
+Time_step = 0.1  # time interval
+Gra_acc = 9.81  # gravity constant
+Thruster_acc = 0.20  # thrust constant
 
 # # the following parameters are not being used in the sample code
-PLATFORM_WIDTH = 0.25  # landing platform width
-PLATFORM_HEIGHT = 0.06  # landing platform height
-ROTATION_ACCEL = 20  # rotation constant
+# PLATFORM_WIDTH = 0.25  # landing platform width
+# PLATFORM_HEIGHT = 0.06  # landing platform height
+# ROTATION_ACCEL = 20  # rotation constant
 
 """Constraint 1: Trying to include drag in y direction (upward) but it's going to e less then the thrust"""
 """Constraint 2: Including the crosswind as a randomness variable"""
 """Constraint 3: This constraint is sort of side counter thrust to crosswind which acts
 with 90% the power of crosswind because if its same as cross wind it basically cancels each other"""
-
 
 class Dynamics(nn.Module):
 
@@ -41,53 +40,36 @@ class Dynamics(nn.Module):
         action: there are three of them
         action[0]: take off or landing thrust in y direction range (0, 1)
         action[1]: cross wind velocity in x direction range (-1, 1)
-                    -1 - cross wind to the left
-                    0 - no cross wind
-                    1 - cross wind to the right
+                -1 - cross wind to the left // 0 - no cross wind // 1 - cross wind to the right
         action[2]: counter side thrust to cross wind but at 90% power range (-1, 1)
-                    -1 - side thrust to the right
-                    0 - no side thrust
-                    1 - side thrust to left
-        state[0] = x
-        state[1] = v_x
-        state[2] = -0.9*v_x
-        state[3] = -v_x
-        state[4] = 0.9*v_x
-        state[5] = y
-        state[6] = v_y
-        """
-        # Apply gravity
-        delta_state_gravity = -t.tensor([0., 0., 0., 0., 0., 0., GRAVITY_ACCEL * FRAME_TIME])
-        # Thrust
-        # Note: Same reason as above. Need a 2-by-1 tensor.
+                -1 - side thrust to the right // 0 - no side thrust // 1 - side thrust to left
+        state[0] = x // state[1] = v_x // state[2] = -0.9*v_x // state[3] = -v_x // state[4] = 0.9*v_x // state[5] = y // state[6] = v_y
+        """  # Apply gravity
+        del_state_gravity = -t.tensor([0., 0., 0., 0., 0., 0., Gra_acc * Time_step])
+        # Thrust # Note: Same reason as above. Need a 2-by-1 tensor.
         vertical_thrust_y = action[0]
         crosswind = action[1]
-        side_counter_thrust = action[2]
+        side_c_thrust = action[2]
 
-        delta_state_vertical = BOOST_ACCEL * FRAME_TIME * t.tensor(
-            [0., 0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
-        delta_state_crosswind_r = BOOST_ACCEL * FRAME_TIME * t.tensor(
-            [0., 1., 0., 0., 0., 0., 0.]) * action * crosswind  # 2
-        delta_state_crosswind_l = BOOST_ACCEL * FRAME_TIME * t.tensor(
-            [0., 0., 0., -1., 0., 0., 0.]) * action * crosswind  # 3
-        delta_state_side_thrust_l = BOOST_ACCEL * FRAME_TIME * t.tensor(
-            [0., 0., -1., 0., 0., 0., 0.]) * action * side_counter_thrust  # 4
-        delta_state_side_thrust_r = BOOST_ACCEL * FRAME_TIME * t.tensor(
-            [0., 0., 0., 0., 1., 0., 0.]) * action * side_counter_thrust  # 5
+        del_state_vertical = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
+        del_state_crosswind_r = Thruster_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0., 0.]) * action * crosswind  # 2
+        del_state_crosswind_l = Thruster_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0., 0.]) * action * crosswind  # 3
+        del_state_side_thrust_l = Thruster_acc * Time_step * t.tensor([0., 0., -1., 0., 0., 0., 0.]) * action * side_c_thrust  # 4
+        del_state_side_thrust_r = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 1., 0., 0.]) * action * side_c_thrust  # 5
         # Update velocity
-        state = state + delta_state_vertical + delta_state_crosswind_r + delta_state_crosswind_l + delta_state_side_thrust_r + delta_state_side_thrust_l + delta_state_gravity  # drag part goes in here
+        state = state + del_state_vertical + del_state_crosswind_r + del_state_crosswind_l + del_state_side_thrust_r + del_state_side_thrust_l + del_state_gravity  # drag part goes in here
         # Update state
         # Note: Same as above. Use operators on matrices/tensors as much as possible.
         # Do not use element-wise operators as they are considered inplace.
-        step_mat = t.tensor([[0., 0., 0., 0., 0., 1., FRAME_TIME],  # 1
+        step_mat = t.tensor([[0., 0., 0., 0., 0., 1., Time_step],  # 1
                              [0., 0., 0., 0., 0., 0., 1.],  # 1
-                             [1., FRAME_TIME, 0., 0., 0., 0., 0.],  # 2
+                             [1., Time_step, 0., 0., 0., 0., 0.],  # 2
                              [0., 1., 0., 0., 0., 0., 0.],  # 2
-                             [1., 0., 0., FRAME_TIME, 0., 0., 0.],  # 3
+                             [1., 0., 0., Time_step, 0., 0., 0.],  # 3
                              [0., 0., 0., 1., 0., 0., 0., 0.],  # 3
-                             [1., 0., FRAME_TIME, 0., 0., 0., 0.],  # 4
+                             [1., 0., Time_step, 0., 0., 0., 0.],  # 4
                              [0., 0., 1., 0., 0., 0., 0.],  # 4
-                             [1., 0., 0., 0., FRAME_TIME, 0., 0.],  # 5
+                             [1., 0., 0., 0., Time_step, 0., 0.],  # 5
                              [0., 0., 0., 0., 1., 0., 0.]])  # 5
         state = t.matmul(step_mat, state)
 
