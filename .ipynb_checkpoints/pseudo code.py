@@ -21,9 +21,9 @@ GRAVITY_ACCEL = 0.16  # gravity constant
 BOOST_ACCEL = 0.20  # thrust constant
 
 # # the following parameters are not being used in the sample code
-# PLATFORM_WIDTH = 0.25  # landing platform width
-# PLATFORM_HEIGHT = 0.06  # landing platform height
-# ROTATION_ACCEL = 20  # rotation constant
+PLATFORM_WIDTH = 0.25  # landing platform width
+PLATFORM_HEIGHT = 0.06  # landing platform height
+ROTATION_ACCEL = 20  # rotation constant
 
 """Constraint 1: Trying to include drag in y direction (upward) but it's going to e less then the thrust"""
 """Constraint 2: Including the crosswind as a randomness variable"""
