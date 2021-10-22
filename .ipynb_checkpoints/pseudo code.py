@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 Time_step = 0.1  # time interval
 Gra_acc = 9.81  # gravity constant
-Thruster_acc = 0.20  # thrust constant
+Thruster_acc = 12.0  # thrust constant
 
 # # the following parameters are not being used in the sample code
 # PLATFORM_WIDTH = 0.25  # landing platform width
@@ -52,10 +52,10 @@ class Dynamics(nn.Module):
         side_c_thrust = action[2]
 
         del_state_vertical = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
-        del_state_crosswind_r = Thruster_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0., 0.]) * action * crosswind  # 2
-        del_state_crosswind_l = Thruster_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0., 0.]) * action * crosswind  # 3
-        del_state_side_thrust_l = Thruster_acc * Time_step * t.tensor([0., 0., -1., 0., 0., 0., 0.]) * action * side_c_thrust  # 4
-        del_state_side_thrust_r = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 1., 0., 0.]) * action * side_c_thrust  # 5
+        del_state_crosswind_r = Thruster_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0., 0.]) * action[1] * crosswind  # 2
+        del_state_crosswind_l = Thruster_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0., 0.]) * action[1] * crosswind  # 3
+        del_state_side_thrust_l = Thruster_acc * Time_step * t.tensor([0., 0., -1., 0., 0., 0., 0.]) * action[2] * side_c_thrust  # 4
+        del_state_side_thrust_r = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 1., 0., 0.]) * action[2] * side_c_thrust  # 5
         # Update velocity
         state = state + del_state_vertical + del_state_crosswind_r + del_state_crosswind_l + del_state_side_thrust_r + del_state_side_thrust_l + del_state_gravity  # drag part goes in here
         # Update state
@@ -63,13 +63,13 @@ class Dynamics(nn.Module):
         # Do not use element-wise operators as they are considered inplace.
         step_mat = t.tensor([[0., 0., 0., 0., 0., 1., Time_step],  # 1
                              [0., 0., 0., 0., 0., 0., 1.],  # 1
-                             [1., Time_step, 0., 0., 0., 0., 0.],  # 2
+                             [1., Time_step, 1., 1., 1., 0., 0.],  # 2
                              [0., 1., 0., 0., 0., 0., 0.],  # 2
-                             [1., 0., 0., Time_step, 0., 0., 0.],  # 3
-                             [0., 0., 0., 1., 0., 0., 0., 0.],  # 3
-                             [1., 0., Time_step, 0., 0., 0., 0.],  # 4
+                             [1., 1., 1., Time_step, 1., 0., 0.],  # 3
+                             [0., 0., 0., 1., 0., 0., 0.],  # 3
+                             [1., 1., Time_step, 1., 1., 0., 0.],  # 4
                              [0., 0., 1., 0., 0., 0., 0.],  # 4
-                             [1., 0., 0., 0., Time_step, 0., 0.],  # 5
+                             [1., 1., 1., 1., Time_step, 0., 0.],  # 5
                              [0., 0., 0., 0., 1., 0., 0.]])  # 5
         state = t.matmul(step_mat, state)
 
@@ -137,7 +137,7 @@ class Simulation(nn.Module):
     @staticmethod
     def initialize_state():
         #  state 0   1   2   3   4   5   6
-        state = [1., 0., 2., 5., 7., 5., 8.]  # need batch of initial states
+        state = [1., 0., 0., 0., 0., 0., 8.]  # need batch of initial states
         return t.tensor(state, requires_grad=False).float()
 
     def error(self, state):
@@ -194,7 +194,7 @@ class Optimize:
 T = 100  # number of time steps
 dim_input = 7  # state space dimensions
 dim_hidden = 20  # latent dimensions
-dim_output = 2  # action space dimensions
+dim_output = 3  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
