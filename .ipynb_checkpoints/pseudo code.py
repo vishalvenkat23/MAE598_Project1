@@ -195,9 +195,9 @@ class Optimize:
     def visualize(self):
         data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
         x = data[:, 0]
-        y = data[:, 1]
+        y = data[:, 3]
         plt.plot(x, y)
-        # plt.show()
+        plt.show()
         # if o == 40:
         #     data = np.array([self.simulation.state_trajectory[i].detach().numpy() for i in range(self.simulation.T)])
         #     x = data[:, 0]
