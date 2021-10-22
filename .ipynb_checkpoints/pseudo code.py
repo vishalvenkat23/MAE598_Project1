@@ -1,22 +1,22 @@
 # overhead
 
 import logging
-import math
-import random
+# import math
+# import random
 import numpy as np
-import time
+# import time
 import torch as t
 import torch.nn as nn
 from torch import optim
-from torch.nn import utils
+# from torch.nn import utils
 import matplotlib.pyplot as plt
 
 logger = logging.getLogger(__name__)
 
 # environment parameters
 
-Time_step = 0.1  # time interval
-Gra_acc = 9.81  # gravity constant
+Time_step = 0.01  # time interval
+Gra_acc = 5.81  # gravity constant
 Thruster_acc = 12.0  # thrust constant
 
 # # the following parameters are not being used in the sample code
@@ -28,6 +28,7 @@ Thruster_acc = 12.0  # thrust constant
 """Constraint 2: Including the crosswind as a randomness variable"""
 """Constraint 3: This constraint is sort of side counter thrust to crosswind which acts
 with 90% the power of crosswind because if its same as cross wind it basically cancels each other"""
+
 
 class Dynamics(nn.Module):
 
@@ -43,34 +44,43 @@ class Dynamics(nn.Module):
                 -1 - cross wind to the left // 0 - no cross wind // 1 - cross wind to the right
         action[2]: counter side thrust to cross wind but at 90% power range (-1, 1)
                 -1 - side thrust to the right // 0 - no side thrust // 1 - side thrust to left
-        state[0] = x // state[1] = v_x // state[2] = -0.9*v_x // state[3] = -v_x // state[4] = 0.9*v_x // state[5] = y // state[6] = v_y
+        state[0] = x // state[1] = v_x // state[2] = x // state[3] = 0.9*v_x // state[4] = y // state[5] = v_y
         """  # Apply gravity
-        del_state_gravity = -t.tensor([0., 0., 0., 0., 0., 0., Gra_acc * Time_step])
+        del_state_gravity = -t.tensor([0., 0., 0., 0., 0., Gra_acc * Time_step])
         # Thrust # Note: Same reason as above. Need a 2-by-1 tensor.
         vertical_thrust_y = action[0]
         crosswind = action[1]
         side_c_thrust = action[2]
+        drag = action[3]
 
-        del_state_vertical = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
-        del_state_crosswind_r = Thruster_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0., 0.]) * action[1] * crosswind  # 2
-        del_state_crosswind_l = Thruster_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0., 0.]) * action[1] * crosswind  # 3
-        del_state_side_thrust_l = Thruster_acc * Time_step * t.tensor([0., 0., -1., 0., 0., 0., 0.]) * action[2] * side_c_thrust  # 4
-        del_state_side_thrust_r = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 1., 0., 0.]) * action[2] * side_c_thrust  # 5
+        del_state_vertical = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
+        del_state_crosswind = Thruster_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0.]) * action[
+            1] * crosswind  # 2
+        # del_state_crosswind_l = Thruster_acc * Time_step * t.tensor([0., -1., 0., 0., 0., 0.]) * action[
+        #     1] * crosswind  # 3
+        del_state_side_thrust = 0.9 * (Thruster_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0.]) * action[
+            2] * side_c_thrust)  # 4
+        # del_state_side_thrust_r = Thruster_acc * Time_step * t.tensor([0., 0., 0., 1., 0., 0.]) * action[
+        #     2] * side_c_thrust  # 5
         # Update velocity
-        state = state + del_state_vertical + del_state_crosswind_r + del_state_crosswind_l + del_state_side_thrust_r + del_state_side_thrust_l + del_state_gravity  # drag part goes in here
+        # state = state + del_state_vertical + del_state_crosswind + del_state_crosswind_l + del_state_side_thrust_r + del_state_side_thrust + del_state_gravity  # drag part goes in here
+
+        state = state + del_state_vertical + del_state_crosswind + del_state_side_thrust + del_state_gravity  # drag part goes in here
         # Update state
         # Note: Same as above. Use operators on matrices/tensors as much as possible.
         # Do not use element-wise operators as they are considered inplace.
-        step_mat = t.tensor([[0., 0., 0., 0., 0., 1., Time_step],  # 1
-                             [0., 0., 0., 0., 0., 0., 1.],  # 1
-                             [1., Time_step, 1., 1., 1., 0., 0.],  # 2
-                             [0., 1., 0., 0., 0., 0., 0.],  # 2
-                             [1., 1., 1., Time_step, 1., 0., 0.],  # 3
-                             [0., 0., 0., 1., 0., 0., 0.],  # 3
-                             [1., 1., Time_step, 1., 1., 0., 0.],  # 4
-                             [0., 0., 1., 0., 0., 0., 0.],  # 4
-                             [1., 1., 1., 1., Time_step, 0., 0.],  # 5
-                             [0., 0., 0., 0., 1., 0., 0.]])  # 5
+        # step_mat = t.tensor([[1., 0., 0., 0., 0., 0.],
+        #                      [Time_step, 1., 0., 0., 0., 0.],
+        #                      [0., 0., 1., 0., 0., 0.],
+        #                      [0., 0., Time_step, 1., 0., 0.],
+        #                      [0., 0., 0., 0., 1., 0.],
+        #                      [0., 0., 0., 0., Time_step, 1.]])
+        step_mat = t.tensor([[0., 0., 0., 0., 1., 0.],
+                             [0., 0., 0., 0., Time_step, 1.],
+                             [0., 0., 1., 0., 0., 0.],
+                             [0., 0., Time_step, 1., 0., 0.],
+                             [1., 0., 0., 0., 0., 0.],
+                             [Time_step, 1., 0., 0., 0., 0.]])
         state = t.matmul(step_mat, state)
 
         return state
@@ -98,6 +108,8 @@ class Controller(nn.Module):
         self.network = nn.Sequential(
             nn.Linear(dim_input, dim_hidden),
             nn.Tanh(),
+            nn.Linear(dim_hidden, dim_hidden),
+            nn.Tanh(),
             nn.Linear(dim_hidden, dim_output),
             # You can add more layers here
             nn.Sigmoid()
@@ -112,6 +124,7 @@ class Controller(nn.Module):
 # Note:
 # 0. Need to change "initialize_state" to optimize the controller over a distribution of initial states
 # 1. self.action_trajectory and self.state_trajectory stores the action and state trajectories along time
+
 
 class Simulation(nn.Module):
 
@@ -136,12 +149,13 @@ class Simulation(nn.Module):
 
     @staticmethod
     def initialize_state():
-        #  state 0   1   2   3   4   5   6
-        state = [1., 0., 0., 0., 0., 0., 8.]  # need batch of initial states
+        #  state 0   1   2   3   4   5
+        state = [0., -5., 0., 5., 0., 5.]  # need batch of initial states
         return t.tensor(state, requires_grad=False).float()
 
-    def error(self, state):
-        return state[0] ** 2 + state[1] ** 2 + state[2] ** 2 + state[3] ** 2 + state[4] ** 2 + state[5] ** 2 + state[6] ** 2
+    @staticmethod
+    def error(state):
+        return state[0] ** 2 + 10 * state[1] ** 2 + state[2] ** 2 + 4 * state[3] ** 2 + state[4] ** 2 + state[5] ** 2
 
 
 # set up the optimizer
@@ -192,16 +206,15 @@ class Optimize:
 # Now it's time to run the code!
 
 T = 100  # number of time steps
-dim_input = 7  # state space dimensions
-dim_hidden = 20  # latent dimensions
+dim_input = 6  # state space dimensions
+dim_hidden = 10  # latent dimensions
 dim_output = 3  # action space dimensions
 d = Dynamics()  # define dynamics
 c = Controller(dim_input, dim_hidden, dim_output)  # define controller
 s = Simulation(c, d, T)  # define simulation
 o = Optimize(s)  # define optimizer
-o.train(80)  # solve the optimization problem
-print(s)
-print(type(s))
-print(d)
-
-print(c)
+o.train(40)  # solve the optimization problem
+# print(s)
+# print(type(s))
+# print(d)
+# print(c)
