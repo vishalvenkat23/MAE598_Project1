@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 Time_step = 0.01  # time interval
 Gra_acc = 5.81  # gravity constant
-Thruster_acc = 12.0  # thrust constant
+Thruster_acc = 20.0  # thrust constant converges only for 15
 
 # # the following parameters are not being used in the sample code
 # PLATFORM_WIDTH = 0.25  # landing platform width
@@ -45,21 +45,24 @@ class Dynamics(nn.Module):
         action[2]: counter side thrust to cross wind but at 90% power range (-1, 1)
                 -1 - side thrust to the right // 0 - no side thrust // 1 - side thrust to left
         state[0] = x // state[1] = v_x // state[2] = x // state[3] = 0.9*v_x // state[4] = y // state[5] = v_y
-        """  # Apply gravity
-        del_state_gravity = -t.tensor([0., 0., 0., 0., 0., Gra_acc * Time_step])
-        # Thrust # Note: Same reason as above. Need a 2-by-1 tensor.
+        """
         vertical_thrust_y = action[0]
         crosswind = action[1]
         side_c_thrust = action[2]
-        drag = action[3]
-
-        del_state_vertical = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 0., 1.]) * vertical_thrust_y  # 1
-        del_state_crosswind = Thruster_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0.]) * action[
-            1] * crosswind  # 2
+        # drag = action[3]
+        # Apply gravity
+        del_state_gravity = -t.tensor([0., 0., 0., 0., 0., Gra_acc * Time_step])
+        del_state_y = Thruster_acc * Time_step * t.tensor([0., 0., 0., 0., 0., -1.]) * action[0]
+        # del_state_x = Thruster_acc * Time_step * t.tensor([0., 0., 0., 1.]) * action[1]
+        # Thrust # Note: Same reason as above. Need a 2-by-1 tensor.
+        temp = del_state_y
+        d_decel = 0.00658 * temp * temp
+        net_acc = Thruster_acc - d_decel
+        del_state_vertical = net_acc * Time_step * t.tensor([0., 0., 0., 0., 0., -1.]) * vertical_thrust_y  # 1
+        del_state_crosswind = net_acc * Time_step * t.tensor([0., 1., 0., 0., 0., 0.]) * crosswind  # 2
         # del_state_crosswind_l = Thruster_acc * Time_step * t.tensor([0., -1., 0., 0., 0., 0.]) * action[
         #     1] * crosswind  # 3
-        del_state_side_thrust = 0.9 * (Thruster_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0.]) * action[
-            2] * side_c_thrust)  # 4
+        del_state_side_thrust = 0.9 * (net_acc * Time_step * t.tensor([0., 0., 0., -1., 0., 0.]) * side_c_thrust)  # 4
         # del_state_side_thrust_r = Thruster_acc * Time_step * t.tensor([0., 0., 0., 1., 0., 0.]) * action[
         #     2] * side_c_thrust  # 5
         # Update velocity
